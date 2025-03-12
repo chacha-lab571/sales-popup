@@ -1,12 +1,12 @@
 (function () {
-    // Safe check for Shopify store domain
-    const STORE_DOMAIN = window.Shopify && window.Shopify.shop ? window.Shopify.shop : null;
-    
-    if (!STORE_DOMAIN) {
+    // Ensure script runs inside a Shopify store
+    if (!window.Shopify || !window.Shopify.shop) {
         console.error("Shopify store domain is missing. Ensure the script runs inside a Shopify store.");
-        return; // Stop execution if no store domain
+        return;
     }
 
+    // Configuration
+    const STORE_DOMAIN = window.Shopify.shop; // Auto-detects store domain
     const API_TOKEN = "YOUR_STOREFRONT_API_TOKEN"; // Replace with your Storefront API token
     const UPDATE_INTERVAL = 10000; // Refresh every 10 seconds
 
@@ -31,7 +31,6 @@
                 }
             }
         }`;
-
         try {
             const response = await fetch(`https://${STORE_DOMAIN}/api/2023-10/graphql.json`, {
                 method: "POST",
@@ -41,9 +40,6 @@
                 },
                 body: JSON.stringify({ query }),
             });
-
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
             const data = await response.json();
             return (
                 data.data.orders.edges[0]?.node.lineItems.edges[0]?.node.title || "No recent sales"
