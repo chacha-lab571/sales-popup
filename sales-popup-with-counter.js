@@ -6,47 +6,24 @@
     }
 
     // Configuration
-    const STORE_DOMAIN = window.Shopify.shop; // Auto-detects store domain
-    const API_TOKEN = "YOUR_STOREFRONT_API_TOKEN"; // Replace with your Storefront API token
+    const BACKEND_URL = "https://your-backend-url.com"; // Replace with deployed backend URL
     const UPDATE_INTERVAL = 10000; // Refresh every 10 seconds
+    const DISPLAY_DURATION = 5000; // Each popup stays for 5s
 
     // Simulated visitor count
     let visitorCount = Math.floor(Math.random() * 30) + 5; // Start with random 5-35
 
-    // Fetch recent sales via Storefront API (GraphQL)
+    let currentSaleIndex = 0;
+    let salesData = [];
+
+    // Fetch recent sales from backend
     async function fetchRecentSales() {
-        const query = `
-        {
-            orders(first: 1, sortKey: CREATED_AT, reverse: true) {
-                edges {
-                    node {
-                        lineItems(first: 1) {
-                            edges {
-                                node {
-                                    title
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }`;
         try {
-            const response = await fetch(`https://${STORE_DOMAIN}/api/2023-10/graphql.json`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Shopify-Storefront-Access-Token": API_TOKEN,
-                },
-                body: JSON.stringify({ query }),
-            });
+            const response = await fetch(`${BACKEND_URL}/recent-sales`);
             const data = await response.json();
-            return (
-                data.data.orders.edges[0]?.node.lineItems.edges[0]?.node.title || "No recent sales"
-            );
+            salesData = data.orders || [];
         } catch (error) {
             console.error("Error fetching sales:", error);
-            return "No recent sales";
         }
     }
 
@@ -57,37 +34,52 @@
     }
 
     // Create or update popup
-    function createOrUpdatePopup(saleItem) {
+    function showPopup() {
+        if (salesData.length === 0) return;
+
+        let order = salesData[currentSaleIndex];
+        currentSaleIndex = (currentSaleIndex + 1) % salesData.length; // Rotate through sales
+
         let popup = document.getElementById("sales-visitor-popup");
         if (!popup) {
             popup = document.createElement("div");
             popup.id = "sales-visitor-popup";
             popup.style.cssText = `
                 position: fixed; bottom: 20px; left: 20px; background: #fff;
-                border: 1px solid #ddd; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                z-index: 1000; max-width: 280px; font-family: Arial, sans-serif; border-radius: 5px;
+                border: 1px solid #ddd; padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 1000; max-width: 300px; font-family: Arial, sans-serif; border-radius: 5px;
+                display: flex; align-items: center;
             `;
             document.body.appendChild(popup);
         }
+
         popup.innerHTML = `
-            <h3 style="margin: 0 0 8px; font-size: 16px; color: #333;">Live Activity</h3>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Visitors Now:</strong> ${visitorCount}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Latest Sale:</strong> ${saleItem}</p>
-            <button style="background: #ff4444; color: #fff; border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px;"
-                onclick="this.parentElement.style.display='none'">Close</button>
+            <img src="${order.productImage}" alt="Product Image" style="width: 50px; height: 50px; border-radius: 5px; margin-right: 10px;">
+            <div>
+                <p style="margin: 5px 0; font-size: 14px;">
+                    <strong>${order.customerName}</strong> in <strong>${order.location}</strong> purchased <strong>${order.productName}</strong> <br>
+                    <small style="color: gray;">${order.timeAgo}</small>
+                </p>
+            </div>
+            <button style="background: #ff4444; color: #fff; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px; margin-left: auto;"
+                onclick="document.getElementById('sales-visitor-popup').remove()">✕</button>
         `;
+
+        popup.style.display = "block";
+        setTimeout(() => {
+            popup.style.display = "none";
+        }, DISPLAY_DURATION);
     }
 
-    // Initialize and refresh popup
+    // Initialize popup system
     async function initPopup() {
-        const saleItem = await fetchRecentSales();
-        createOrUpdatePopup(saleItem);
-
+        await fetchRecentSales();
         setInterval(async () => {
             updateVisitorCount();
-            const newSaleItem = await fetchRecentSales();
-            createOrUpdatePopup(newSaleItem);
+            await fetchRecentSales();
+            showPopup();
         }, UPDATE_INTERVAL);
+        showPopup(); // Show first popup immediately
     }
 
     // Start when page loads
